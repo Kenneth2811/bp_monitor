@@ -314,7 +314,7 @@
                     <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
                         <i class="fa-solid fa-search"></i>
                     </span>
-                    <input type="text" id="client-search" oninput="renderClientsTable()" placeholder="Search by name, phone, ID..." class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    <input type="search" id="client-search" autocomplete="off" oninput="renderClientsTable()" onkeydown="if(event.key==='Enter'){event.preventDefault();renderClientsTable();}" placeholder="Search by name, phone, ID..." class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
                 </div>
                 <div class="flex items-center space-x-3 w-full sm:w-auto">
                     <select id="client-sort" onchange="renderClientsTable()" class="bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
@@ -1141,17 +1141,27 @@
 
         // Client Directory Management
         function renderClientsTable() {
-            const search = document.getElementById('client-search').value.toLowerCase();
+            // Normalise any value (string, number, null) to a lowercase, single-spaced string
+            const norm = v => String(v == null ? '' : v).toLowerCase().replace(/\s+/g, ' ').trim();
+            const search = norm(document.getElementById('client-search').value);
+            const searchDigits = search.replace(/\D/g, '');
             const sort = document.getElementById('client-sort').value;
 
-            let filtered = appState.clients.filter(c => 
-                c.fullName.toLowerCase().includes(search) || 
-                c.clientId.toLowerCase().includes(search) || 
-                c.phone.toLowerCase().includes(search)
-            );
+            let filtered = appState.clients.filter(c => {
+                if (!search) return true;
+                const name = norm(c.fullName);
+                const id = norm(c.clientId);
+                const phone = norm(c.phone);
+                // Every word typed must appear in the name (so "osei abena" still finds "Abena Osei")
+                const nameMatch = search.split(' ').every(word => name.includes(word));
+                // Phone match ignoring spaces, dashes and +
+                const phoneMatch = phone.includes(search) ||
+                    (searchDigits.length > 0 && phone.replace(/\D/g, '').includes(searchDigits));
+                return nameMatch || id.includes(search) || phoneMatch;
+            });
 
-            if (sort === 'name-asc') filtered.sort((a, b) => a.fullName.localeCompare(b.fullName));
-            if (sort === 'name-desc') filtered.sort((a, b) => b.fullName.localeCompare(a.fullName));
+            if (sort === 'name-asc') filtered.sort((a, b) => String(a.fullName || '').localeCompare(String(b.fullName || '')));
+            if (sort === 'name-desc') filtered.sort((a, b) => String(b.fullName || '').localeCompare(String(a.fullName || '')));
 
             const tbody = document.getElementById('clients-table-body');
             if (filtered.length === 0) {
